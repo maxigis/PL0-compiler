@@ -1,9 +1,3 @@
-# ------------------------------------------------------------
-# calclex.py
-#
-# tokenizer for a simple expression evaluator for
-# numbers and +,-,*,/
-# ------------------------------------------------------------
 import lex
 
 
@@ -59,7 +53,7 @@ class Scanner(object):
     t_GTR = r'>'
     t_LEQ = r'<='
     t_GEQ = r'>='
-    t_STRING = r'(\'.*?\')|(\".*?\")'
+    t_STRING = r'\'(.*?)\'|\"(.*?)\"'
 
     def t_ID(self, t):
         r'[a-z|A-Z][a-zA-Z0-9\-_]*'

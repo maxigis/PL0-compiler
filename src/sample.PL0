@@ -1,0 +1,9 @@
+var X, Y, Z;
+
+begin
+  write ('NUM=');
+  readln (X);
+  readln (Y);
+  Z:=2*2*X*Y;
+  writeln ('NUM*2=',Z)
+end.
