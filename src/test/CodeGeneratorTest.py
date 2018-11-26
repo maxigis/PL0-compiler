@@ -1,5 +1,5 @@
 import unittest
-from CodeGenerator import CodeGenerator
+from main.CodeGenerator import CodeGenerator
 
 
 class CodeGeneratorTest(unittest.TestCase):

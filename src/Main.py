@@ -1,35 +1,22 @@
-from Parser import Parser
-from Scanner import Scanner
 from ParseError import ParseError
-from Semantic import Semantic
-from CodeGenerator import CodeGenerator
+from main.Compiler import compile
+from main.FileUtils import read_file
+from main.FileUtils import write_bin
+from main.FileUtils import make_executable
 import logging
 
 
-def read_file(archivo):
-    lines = []
-    try:
-        file = open(archivo)
-    except IOError:
-        raise IOError("Error reading file")
-    for line in file:
-        lines.append(line)
-    file.close()
-    return " ".join(lines)
-
-
-data = read_file('../resources/bien/BIEN-01.PL0')
-
-tokenizer = Scanner(data)
-
-parser = Parser(tokenizer)
 logging.basicConfig(level=logging.INFO)
 
 try:
-    semantic = Semantic()
-    codeGenerator = CodeGenerator("program")
-    parser.parse(semantic, codeGenerator)
+    output = 'program'
+    data = read_file('../resources/bien/BIEN-01.PL0')
+    result = compile(data)
+    if result.success:
+        write_bin(output, bytearray(result.bytes))
+        make_executable(output)
+    else:
+        e = result.errors[0]
+        print('Error de sintaxis, en linea ' + str(e.token.lineno) + ' se esperaba ' + e.expected + ' y se encontro ' + e.token.value)
 except ParseError as e:
-    print('Error de sintaxis, en linea ' + str(
-        e.token.lineno) + ' se esperaba ' + e.expected + ' y se encontro ' + e.token.value)
-    print(str.splitlines(data)[e.token.lineno - 1])
+    print('Error de sintaxis, en linea ' + str(e.token.lineno) + ' se esperaba ' + e.expected + ' y se encontro ' + e.token.value)

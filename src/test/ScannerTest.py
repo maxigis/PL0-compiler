@@ -1,8 +1,5 @@
 import unittest
-from os import listdir
-from os.path import isfile, join
-from Parser import Parser
-from Scanner import Scanner
+from main.Scanner import Scanner
 
 OK_FOLDER = "../resources/bien"
 FAIL_FOLDER = "../resources/mal"
