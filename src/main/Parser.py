@@ -1,4 +1,3 @@
-from ParseError import ParseError
 from main.CompilationResult import CompilationResult
 from main.CompilationError import CompilationError
 import logging
@@ -15,10 +14,14 @@ class Parser(object):
 
     def parse(self):
         self.logger.info('Starting parse')
-        self.tokenizer.next()
-        self._parse_block(0)
-        if self.tokenizer.last_token.type != 'PERIOD':
-            raise ParseError('PERIOD', self.tokenizer.last_token)
+        try:
+            self.tokenizer.next()
+            self._parse_block(0)
+            if self.tokenizer.last_token.type != 'PERIOD':
+                self._add_error(CompilationError(CompilationError.INVALID_TOKEN, self.tokenizer.last_token, 'program', 'PERIOD'))
+        except StopIteration as s:
+            self._add_error(CompilationError(CompilationError.UNEXPECTED_EOF, self.tokenizer.last_token, 'program'))
+
         self.logger.info('Parsing finished')
         if self.errors:
             return CompilationResult(False, None, self.errors)
@@ -38,30 +41,48 @@ class Parser(object):
     def semantic(self):
         return self._semantic
 
+    @staticmethod
+    def is_int32(number):
+        try:
+            return not (int(number) >> 32)
+        except ValueError:
+            return False
+
     def _parse_factor(self, base, offset):
         tokenizer = self.tokenizer
         self.logger.info('_parse_factor')
-        if tokenizer.last_token.type == 'LPAREN':
+
+        if tokenizer.last_token.type == 'ID':
+            if self.semantic.cannot_factor(tokenizer.last_token.value, base, offset):
+                self._add_error(CompilationError(CompilationError.ID_NOT_FACTOR, tokenizer.last_token, 'factor'))
+            else:
+                id_type = self.semantic.get_type(tokenizer.last_token.value, base, offset)
+                if id_type == 'const':
+                    self.generator.factor_number(self.semantic.get_value(tokenizer.last_token.value, base, offset))
+                elif id_type == 'var':
+                    self.generator.factor_var(self.semantic.get_value(tokenizer.last_token.value, base, offset))
+                else:
+                    raise ValueError("Invalid factor type: " + id_type)  # this should be unreachable
+
+            # tokenizer.next()
+        elif tokenizer.last_token.type == 'NUMBER':
+            if self.is_int32(tokenizer.last_token.value):
+                self.generator.factor_number(tokenizer.last_token.value)
+            else:
+                self._add_error(CompilationError(CompilationError.INT_TOO_LARGE, tokenizer.last_token, 'factor', 'RPAREN'))
+            # tokenizer.next()
+        elif tokenizer.last_token.type == 'LPAREN':
             tokenizer.next()
             self._parse_exp(base, offset)
             if tokenizer.last_token.type != 'RPAREN':
-                raise ParseError('RPAREN', tokenizer.last_token)
-        elif tokenizer.last_token.type == 'ID':
-            if self.semantic.cannot_factor(tokenizer.last_token.value, base, offset):
-                raise ValueError("Invalid id for factor: " + tokenizer.last_token.value)
-            id_type = self.semantic.get_type(tokenizer.last_token.value, base, offset)
-            if id_type == 'const':
-                self.generator.factor_number(self.semantic.get_value(tokenizer.last_token.value, base, offset))
-            elif id_type == 'var':
-                self.generator.factor_var(self.semantic.get_value(tokenizer.last_token.value, base, offset))
-            else:
-                raise ValueError("Invalid factor type: " + id_type)
-
-        elif tokenizer.last_token.type == 'NUMBER':
-            self.generator.factor_number(tokenizer.last_token.value)
+                self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'factor', 'RPAREN'))
+            # else:
+                # tokenizer.next()
         else:
-            raise ParseError('ID, NUMBER, LPAREN', tokenizer.last_token)
+            self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'factor', 'ID,NUMBER,LPAREN'))
+
         tokenizer.next()
+
         return offset
 
     def _parse_term(self, base, offset):
@@ -95,9 +116,11 @@ class Parser(object):
                     tokenizer.last_token.type != 'LSS' and tokenizer.last_token.type != 'LEQ' and
                     tokenizer.last_token.type != 'GTR' and tokenizer.last_token.type != 'GEQ'):
 
-                raise ParseError('EQL,NEQ,LSS,LEQ,GTR,GEQ', tokenizer.last_token)
-            comparator = tokenizer.last_token.type
-            tokenizer.next()
+                self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'cond', 'comparator'))
+                comparator = None
+            else:
+                comparator = tokenizer.last_token.type
+                tokenizer.next()
             offset = self._parse_exp(base, offset)
             self.generator.compare(comparator)
         return offset
@@ -133,41 +156,62 @@ class Parser(object):
         tokenizer = self.tokenizer
         if tokenizer.last_token.type == 'ID':
             if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
-                raise ParseError("Undefined id", tokenizer.last_token)
+                self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'assignment', 'ID'))
             if self.semantic.cannot_assign(tokenizer.last_token.value, base, offset):
-                raise ParseError("Cant assign value to id", tokenizer.last_token)
+                self._add_error(CompilationError(CompilationError.ID_NOT_ASSIGNABLE, tokenizer.last_token, 'assignment', 'ID'))
             id_token = tokenizer.last_token
-            if tokenizer.next().type != 'BECOMES':
-                raise ParseError('BECOMES', tokenizer.last_token)
             tokenizer.next()
-            offset = self._parse_exp(base, offset)
-            self.generator.becomes(self.semantic.get_value(id_token.value, base, offset))
+            if tokenizer.last_token.type == 'BECOMES' or tokenizer.last_token.type == 'EQL':
+                if tokenizer.last_token.type == 'EQL':
+                    self._add_error(CompilationError(CompilationError.EQL_BECOMES_MISMATCH, tokenizer.last_token, 'assignment', 'BECOMES'))
+                tokenizer.next()
+                offset = self._parse_exp(base, offset)
+                self.generator.becomes(self.semantic.get_value(id_token.value, base, offset))
+            else:
+                self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'assignment', 'BECOMES'))
+                if tokenizer.last_token.type != 'SEMICOLON':
+                    tokenizer.next()
 
         elif tokenizer.last_token.type.lower() == 'call':
-            if tokenizer.next().type != 'ID':
-                raise ParseError('ID', tokenizer.last_token)
-            self.generator.call(self.semantic.get_value(tokenizer.last_token.value, base, offset))
-            tokenizer.next()
+            if tokenizer.next().type == 'ID':
+                if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
+                    self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'call', 'ID'))
+                elif self.semantic.cannot_call(tokenizer.last_token.value, base, offset):
+                    self._add_error(CompilationError(CompilationError.ID_NOT_CALLABLE, tokenizer.last_token, 'call', 'ID'))
+                else:
+                    self.generator.call(self.semantic.get_value(tokenizer.last_token.value, base, offset))
+
+                tokenizer.next()
+            elif tokenizer.last_token.type == 'SEMICOLON':
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'call', 'ID'))
+            else:
+                self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'call', 'ID'))
+                tokenizer.next()
 
         elif tokenizer.last_token.type.lower() == 'begin':
             seguir = True
             tokenizer.next()
             while seguir:
+                token = tokenizer.last_token
                 offset = self._parse_prop(base, offset)
                 if tokenizer.last_token.type.lower() == 'end':
                     seguir = False
                     tokenizer.next()
-                elif tokenizer.last_token.type != 'SEMICOLON':
-                    self._add_error(('end,SEMICOLON', tokenizer.last_token, 'proposition'))
-                else:
+                elif tokenizer.last_token.type == 'SEMICOLON':
                     tokenizer.next()
+                elif tokenizer.last_token.lexpos == token.lexpos:
+                    self._add_error(CompilationError(CompilationError.INVALID_TOKEN, self._tokenizer.last_token, 'proposition', 'SEMICOLON'))
+                    tokenizer.next()
+                else:
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'proposition', 'SEMICOLON'))
 
         elif tokenizer.last_token.type.lower() == 'if':
             tokenizer.next()
             offset = self._parse_cond(base, offset)
             if tokenizer.last_token.type.lower() != 'then':
-                raise ParseError('then', tokenizer.last_token)
-            tokenizer.next()
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'if', 'then'))
+            else:
+                tokenizer.next()
             offset = self._parse_prop(base, offset)
             self.generator.fix_up()
 
@@ -176,38 +220,53 @@ class Parser(object):
             tokenizer.next()
             offset = self._parse_cond(base, offset)
             if tokenizer.last_token.type.lower() != 'do':
-                raise ParseError('do', tokenizer.last_token)
-            tokenizer.next()
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'while', 'do'))
+            else:
+                tokenizer.next()
             offset = self._parse_prop(base, offset)
             self.generator.fix_while()
             self.generator.fix_up()
 
         elif tokenizer.last_token.type.lower() == 'readln':
             if tokenizer.next().type != 'LPAREN':
-                raise ParseError('LPAREN', tokenizer.last_token)
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'readln', 'LPAREN'))
+            else:
+                tokenizer.next()
             seguir = True
             while seguir:
-                if tokenizer.next().type != 'ID':
-                    raise ParseError('ID', tokenizer.last_token)
+                if tokenizer.last_token.type == 'ID':
+                    if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
+                        self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'readln', 'ID'))
+                    elif self.semantic.cannot_assign(tokenizer.last_token.value, base, offset):
+                        self._add_error(CompilationError(CompilationError.ID_NOT_ASSIGNABLE, tokenizer.last_token, 'readln', 'ID'))
+                    self.generator.readln(self.semantic.get_value(tokenizer.last_token.value, base, offset))
+                    tokenizer.next()
+                else:
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'readln', 'ID'))
 
-                self.generator.readln(self.semantic.get_value(tokenizer.last_token.value, base, offset))
-                if tokenizer.next().type == 'RPAREN':
+                if tokenizer.last_token.type == 'RPAREN':
                     seguir = False
-                elif tokenizer.last_token.type != 'COMMA':
-                    raise ParseError('RPAREN,COMMA', tokenizer.last_token)
-            tokenizer.next()
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'COMMA':
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'ID':
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'readln', 'COMMA'))
+                else:
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'readln', 'RPAREN'))
+                    seguir = False
 
         elif tokenizer.last_token.type.lower() == 'write' or tokenizer.last_token.type.lower() == 'writeln':
             is_writeln = tokenizer.last_token.type.lower() == 'writeln'
-            if tokenizer.next().type != 'LPAREN':
-                if is_writeln:
-                    self.generator.writeln()
-                    return offset
-                else:
-                    raise ParseError('LPAREN', tokenizer.last_token)
+            if tokenizer.next().type == 'LPAREN':
+                tokenizer.next()
+            elif is_writeln:
+                self.generator.writeln()
+                return offset
+            else:
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'write', 'LPAREN'))
             seguir = True
             while seguir:
-                if tokenizer.next().type != 'STRING':
+                if tokenizer.last_token.type != 'STRING':
                     offset = self._parse_exp(base, offset)
                     self.generator.write()
                 else:
@@ -215,93 +274,107 @@ class Parser(object):
                     tokenizer.next()
                 if tokenizer.last_token.type == 'RPAREN':
                     seguir = False
-                elif tokenizer.last_token.type != 'COMMA':
-                    raise ParseError('RPAREN,COMMA', tokenizer.last_token)
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'COMMA':
+                    tokenizer.next()
+                else:
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'write', 'RPAREN'))
+                    seguir = False
             if is_writeln:
                 self.generator.writeln()
-            tokenizer.next()
         return offset
 
     def _parse_block(self, base):
         self.logger.info('_parse_block')
-        offset = 0
         self.generator.init_block()
+        offset = 0
         tokenizer = self.tokenizer
-        token = tokenizer.last_token
-        if token.type.lower() == 'const':
+        if tokenizer.last_token.type.lower() == 'const':
             seguir = True
+            tokenizer.next()
             while seguir:
                 const_id = None
-                if tokenizer.next().type != 'ID':
-                    if tokenizer.last_token.type == 'EQL':
-                        self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'ID'))
-                    else:
-                        self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'const', 'ID'))
-                        tokenizer.next()
-                else:
-                    const_id = tokenizer.last_token.value
-                    tokenizer.next()
 
-                if tokenizer.last_token.type != 'EQL':
-                    if tokenizer.last_token.type == 'BECOMES':
-                        self._add_error(CompilationError(CompilationError.EQL_BECOMES_MISMATCH, tokenizer.last_token, 'const'))
-                        tokenizer.next()
-                    elif tokenizer.last_token.type == 'NUMBER':
-                        self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'EQL'))
+                if tokenizer.last_token.type == 'ID':
+                    if self.semantic.id_not_exists_in_context(tokenizer.last_token.value, base, offset):
+                        const_id = self._tokenizer.last_token.value
                     else:
-                        self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'const', 'EQL'))
-                        tokenizer.next()
-                else:
+                        self._add_error(CompilationError(CompilationError.ID_ALREADY_DEFINED, tokenizer.last_token, 'const'))
                     tokenizer.next()
+                elif tokenizer.last_token.type == 'EQL':
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'ID'))
+                else:
+                    self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'const', 'ID'))
+
+                if tokenizer.last_token.type == 'EQL':
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'BECOMES':
+                    self._add_error(CompilationError(CompilationError.BECOMES_EQL_MISMATCH, tokenizer.last_token, 'const', 'EQL', 'BECOMES'))
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'NUMBER':
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'EQL'))
+                else:
+                    self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'const', 'EQL'))
 
                 value = 0
-                if tokenizer.last_token.type != 'NUMBER':
-                    if tokenizer.last_token == 'SEMICOLON':
-                        self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'NUMBER'))
-                    else:
-                        self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'const', 'NUMBER'))
-                        token = tokenizer.next()
-                else:
+                if tokenizer.last_token.type == 'NUMBER':
                     value = tokenizer.last_token.value
-                    token = tokenizer.next()
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'SEMICOLON':
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'NUMBER'))
+                else:
+                    self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'const', 'NUMBER'))
 
                 if const_id:
                     self.semantic.add_id(base, offset, 'const', const_id, value)
                     offset = offset + 1
 
-                if token.type == 'SEMICOLON':
+                if tokenizer.last_token.type == 'SEMICOLON':
                     seguir = False
-                    token = tokenizer.next()
-                elif token.type != 'COMMA':
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'COMMA':
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'ID':
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'COMMA'))
+                else:
                     self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'const', 'SEMICOLON'))
                     seguir = False
 
-        if token.type.lower() == 'var':
+        if tokenizer.last_token.type.lower() == 'var':
             seguir = True
+            tokenizer.next()
             while seguir:
-                if tokenizer.next().type != 'ID':
-                    raise ParseError('ID', tokenizer.last_token)
+                if tokenizer.last_token.type == 'ID':
+                    if self.semantic.id_not_exists_in_context(tokenizer.last_token.value, base, offset):
+                        self.semantic.add_id(base, offset, "var", tokenizer.last_token.value)
+                        offset = offset + 1
+                    else:
+                        self._add_error(CompilationError(CompilationError.ID_ALREADY_DEFINED, tokenizer.last_token, 'const'))
+                    tokenizer.next()
+                else:
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'var', 'ID'))
 
-                self.semantic.add_id(base, offset, "var", tokenizer.last_token.value)
-                offset = offset + 1
-
-                token = tokenizer.next()
-                if token.type == 'SEMICOLON':
+                if tokenizer.last_token.type == 'SEMICOLON':
                     seguir = False
-                elif token.type != 'COMMA':
-                    raise ParseError('SEMICOLON, COMMA', tokenizer.last_token)
-            token = tokenizer.next()
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'COMMA':
+                    tokenizer.next()
+                elif tokenizer.last_token.type == 'ID':
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'var', 'COMMA'))
+                else:
+                    self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'var', 'SEMICOLON'))
+                    seguir = False
 
-        procedure = token.type.lower() == 'procedure'
+        procedure = tokenizer.last_token.type.lower() == 'procedure'
         while procedure:
             if tokenizer.next().type != 'ID':
-                self._add_error(('ID', tokenizer.last_token, 'procedure'))
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'procedure', 'ID'))
             else:
                 self.semantic.add_id(base, offset, "procedure", tokenizer.last_token.value, self.generator.buffer_size())
                 offset = offset + 1
 
             if tokenizer.next().type != 'SEMICOLON':
-                self._add_error(('SEMICOLON', tokenizer.last_token))
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'procedure', 'SEMICOLON'))
             else:
                 tokenizer.next()
 
@@ -309,14 +382,29 @@ class Parser(object):
             self.generator.add_return()
 
             if tokenizer.last_token.type != 'SEMICOLON':
-                self._add_error(('SEMICOLON', tokenizer.last_token))
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'procedure', 'SEMICOLON'))
             else:
                 tokenizer.next()
 
             procedure = tokenizer.last_token.type.lower() == 'procedure'
-
+# next() ?
         self.generator.fix_block()
         self._parse_prop(base, offset)
+
+    def _process_next(self, expected_token, next_token, context, default=None, mismatch=None):
+        value = default
+        if self._tokenizer.last_token.type != expected_token:
+            if mismatch and self._tokenizer.last_token.type == mismatch:
+                self._add_error(CompilationError(CompilationError.MISMATCH_TOKEN, self._tokenizer.last_token, context, expected_token, mismatch))
+                self._tokenizer.next()
+            elif self._tokenizer.last_token.type == next_token:
+                self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, context, expected_token))
+            else:
+                self._add_error(CompilationError(CompilationError.INVALID_TOKEN, self._tokenizer.last_token, context, expected_token))
+        else:
+            value = self._tokenizer.last_token.value
+            self._tokenizer.next()
+        return value
 
     def _add_error(self, error):
         self.generator.disable()

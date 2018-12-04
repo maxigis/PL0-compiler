@@ -36,7 +36,7 @@ TEXT_INDEX = 224
 EDI_INDEX = 1151
 
 VIRTUAL_ADDRESS = 134512640
-ADDRESS = 134512864
+ADDRESS = 134512640
 VAR_SIZE = 4
 WORD_SIZE = 4294967296  # 2^32
 
@@ -114,9 +114,9 @@ class _CodeGenerator(object):
         else:
             raise ValueError("Invalid operator")
 
-    def becomes(self, numero_var):
+    def becomes(self, var_index):
         self._pop_eax()
-        self.buffer += MOV_VAR + self._l_endian(VAR_SIZE * numero_var)
+        self.buffer += MOV_VAR + self._l_endian(VAR_SIZE * var_index)
 
     def invert(self):
         self._pop_eax()
@@ -129,7 +129,7 @@ class _CodeGenerator(object):
             val = value.replace('\'', '').replace('\"', '')
 
             offset = 20
-            self.buffer += MOV_ECX_NUM + self._l_endian(ADDRESS - 0xe0 + self.buffer_size() + offset)
+            self.buffer += MOV_ECX_NUM + self._l_endian(ADDRESS + self.buffer_size() + offset)
             self.buffer += MOV_EDX_NUM + self._l_endian(len(val))
             self.buffer += CALL + self._calc_jump(IO_OUT_STRING, self.buffer_size() + 5)
             self.buffer += JMP + self._l_endian(len(val))

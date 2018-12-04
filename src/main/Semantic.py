@@ -1,4 +1,3 @@
-
 TYPE = 0
 NAME = 1
 VALUE = 2
@@ -8,6 +7,12 @@ class Semantic(object):
     def __init__(self):
         self.table = []
         self.var_amount = 0
+
+    def id_exists_in_context(self, name, base, offset):
+        return self._find_in_context(name, base, offset)
+
+    def id_not_exists_in_context(self, name, base, offset):
+        return not self.id_exists_in_context(name, base, offset)
 
     def id_exists(self, name, base, offset):
         return self._find(name, base, offset)
@@ -42,7 +47,7 @@ class Semantic(object):
                 if not types or self.table[i][TYPE] in types:
                     return self.table[i]
                 else:
-                    return self.table[i]
+                    return None
         return None
 
     def _get(self, name, base, offset, elem):

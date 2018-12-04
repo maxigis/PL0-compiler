@@ -1,5 +1,6 @@
 import os
 import stat
+from pathlib import Path
 
 
 def read_lines(filename):
@@ -14,9 +15,13 @@ def read_lines(filename):
     return lines
 
 
+def file_exists(filename):
+    return Path(filename).is_file()
+
+
 def read_file(filename):
     lines = read_lines(filename)
-    return "\n".join(lines)
+    return "".join(lines)
 
 
 def write_bin(filename, content):
@@ -29,3 +34,9 @@ def make_executable(filename):
     st = os.stat(filename)
     os.chmod(filename, st.st_mode | stat.S_IEXEC)
 
+
+def write_lines(filename, lines):
+    output_file = open(filename, "w")
+    for line in lines:
+        output_file.write(line)
+    output_file.close()

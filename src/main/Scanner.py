@@ -3,14 +3,15 @@ from main import lex
 
 class Scanner(object):
 
+    COMPARATORS = ['=', '<>', '<', '>', '<=', '>=']
+
     def __init__(self, data):
         self.last_token = None
         self.build()
         self.input(data)
 
     keywords = (
-        'begin', 'call', 'const', 'do', 'end', 'if', 'odd', 'procedure', 'then', 'var', 'while', 'write', 'writeln', 'readln',
-        'BEGIN', 'CALL', 'CONST', 'DO', 'END', 'IF', 'ODD', 'PROCEDURE', 'THEN', 'VAR', 'WHILE', 'WRITE', 'WRITELN', 'READLN'
+        'begin', 'call', 'const', 'do', 'end', 'if', 'odd', 'procedure', 'then', 'var', 'while', 'write', 'writeln', 'readln'
     )
 
     tokens = keywords + (
@@ -57,8 +58,8 @@ class Scanner(object):
 
     def t_ID(self, t):
         r'[a-z|A-Z][a-zA-Z0-9\-_]*'
-        if t.value in self.keywords:
-            t.type = t.value
+        if t.value.lower() in self.keywords:
+            t.type = t.value.lower()
         return t
 
     # A regular expression rule with some action code

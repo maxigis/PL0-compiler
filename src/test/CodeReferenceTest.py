@@ -6,7 +6,7 @@ code = '''
 var X, Y;
 
 procedure INICIAR;
-    const Y := 2;
+    const Y = 2;
     procedure ASIGNAR;
     X := Y;
     call ASIGNAR;
