@@ -64,7 +64,7 @@ class ConstErrors(unittest.TestCase):
         result = compile(const_eql_becomes)
         self.assertFalse(result.success)
         self.assertEqual(1, len(result.errors))
-        self.assertEqual(CompilationError.MISMATCH_TOKEN, result.errors[0].error_type)
+        self.assertEqual(CompilationError.BECOMES_EQL_MISMATCH, result.errors[0].error_type)
 
     def test_const_miss_value(self):
         result = compile(const_miss_value)

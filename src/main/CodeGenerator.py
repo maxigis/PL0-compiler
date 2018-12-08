@@ -6,7 +6,7 @@ INITIAL_EDI = [0x0, 0x0, 0x0, 0x0]
 
 MOV_EDI = [0xBF]
 MOV_EAX_VAR = [0x8B, 0x87]
-MOV_VAR = [0x89, 0x87]
+MOV_VAR_EAX = [0x89, 0x87]
 MOV_EAX_NUM = [0xB8]
 MOV_ECX_NUM = [0xB9]
 MOV_EDX_NUM = [0xBA]
@@ -27,7 +27,7 @@ RETURN = [0xC3]
 OPERATORS_DIC = {"LSS": [0x7C, 0x05], "GTR": [0x7F, 0x05], "EQL": [0x74, 0x05], "GEQ": [0x7D, 0x05], "LEQ": [0x7E, 0x05], "NEQ": [0x75, 0x05]}
 
 ODD = [0xA8, 0x01, 0x7B, 0x05]
-CMP_EAX_EBX = [0x39, 0xC3]
+CMP_EBX_EAX = [0x39, 0xC3]
 
 FILE_SIZE_INDEX = 68
 MEMORY_SIZE_INDEX = 72
@@ -116,7 +116,7 @@ class _CodeGenerator(object):
 
     def becomes(self, var_index):
         self._pop_eax()
-        self.buffer += MOV_VAR + self._l_endian(VAR_SIZE * var_index)
+        self.buffer += MOV_VAR_EAX + self._l_endian(VAR_SIZE * var_index)
 
     def invert(self):
         self._pop_eax()
@@ -146,7 +146,7 @@ class _CodeGenerator(object):
 
     def readln(self, numero_var):
         self.buffer += CALL + self._calc_jump(IO_INT_IN, self.buffer_size() + 5)
-        self.buffer += MOV_VAR + self._l_endian(VAR_SIZE * numero_var)
+        self.buffer += MOV_VAR_EAX + self._l_endian(VAR_SIZE * numero_var)
 
     def odd(self):
         self._pop_eax()
@@ -156,7 +156,7 @@ class _CodeGenerator(object):
 
     def compare(self, comparator):
         self._pop_eax()
-        self.buffer += POP_EBX + CMP_EAX_EBX + OPERATORS_DIC[comparator]
+        self.buffer += POP_EBX + CMP_EBX_EAX + OPERATORS_DIC[comparator]
         self.buffer += JMP + INITIAL_EDI
         self.stack.append(self.buffer_size())
 
@@ -175,7 +175,7 @@ class _CodeGenerator(object):
 
     def read_ln(self, var):
         self.buffer += CALL + self._calc_jump(IO_INT_IN, self.buffer_size() + 5)
-        self.buffer += MOV_VAR + self._l_endian(VAR_SIZE * var)
+        self.buffer += MOV_VAR_EAX + self._l_endian(VAR_SIZE * var)
 
     def call(self, position):
         self.buffer += CALL + self._calc_jump(position, self.buffer_size() + 5)
