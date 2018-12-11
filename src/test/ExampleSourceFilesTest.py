@@ -24,7 +24,7 @@ class ExampleSourceFilesTest(unittest.TestCase):
             code = file.read()
             file.close()
             comp_result = compile(code)
-            self.assertTrue(comp_result.success)
+            self.assertTrue(comp_result.success, "Error in file " + filename)
 
     def test_files_fail(self):
         files_ok = [join(FAIL_FOLDER, f) for f in listdir(FAIL_FOLDER) if isfile(join(FAIL_FOLDER, f))]

@@ -11,7 +11,7 @@ class Scanner(object):
         self.input(data)
 
     keywords = (
-        'begin', 'call', 'const', 'do', 'end', 'if', 'odd', 'procedure', 'then', 'var', 'while', 'write', 'writeln', 'readln', 'else'
+        'begin', 'call', 'const', 'do', 'end', 'if', 'odd', 'procedure', 'then', 'var', 'while', 'write', 'writeln', 'readln'
     )
 
     tokens = keywords + (

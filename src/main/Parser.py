@@ -49,20 +49,20 @@ class Parser(object):
         except ValueError:
             return False
 
-    def _parse_factor(self, base, offset):
+    def _parse_factor(self):
         tokenizer = self.tokenizer
         self.logger.info('_parse_factor')
 
         if tokenizer.last_token.type == 'ID':
-            id_type = self.semantic.get_type(tokenizer.last_token.value, base, offset)
+            id_type = self.semantic.get_type(tokenizer.last_token.value)
             if id_type == 'const':
-                value = self.semantic.get_value(tokenizer.last_token.value, base, offset)
+                value = self.semantic.get_value(tokenizer.last_token.value)
                 self.code_gen.factor_number(value)
             elif id_type == 'var':
-                value = self.semantic.get_value(tokenizer.last_token.value, base, offset)
+                value = self.semantic.get_value(tokenizer.last_token.value)
                 self.code_gen.factor_var(value)
             else:
-                if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
+                if self.semantic.id_not_exists(tokenizer.last_token.value):
                     self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'factor'))
                 else:
                     self._add_error(CompilationError(CompilationError.ID_NOT_FACTOR, tokenizer.last_token, 'factor'))
@@ -74,7 +74,7 @@ class Parser(object):
                 self._add_error(CompilationError(CompilationError.INT_TOO_LARGE, tokenizer.last_token, 'factor', 'RPAREN'))
         elif tokenizer.last_token.type == 'LPAREN':
             tokenizer.next()
-            self._parse_exp(base, offset)
+            self._parse_exp()
             if tokenizer.last_token.type != 'RPAREN':
                 self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'factor', 'RPAREN'))
         else:
@@ -82,14 +82,14 @@ class Parser(object):
 
         tokenizer.next()
 
-    def _parse_term(self, base, offset):
+    def _parse_term(self):
         self.logger.info('_parse_term')
         tokenizer = self.tokenizer
         cont = True
         op = None
 
         while cont:
-            self._parse_factor(base, offset)
+            self._parse_factor()
             if op == 'TIMES':
                 self.code_gen.mult()
                 op = None
@@ -103,26 +103,26 @@ class Parser(object):
             else:
                 cont = False
 
-    def _parse_cond(self, base, offset):
+    def _parse_cond(self):
         self.logger.info('_parse_cond')
         tokenizer = self.tokenizer
         if tokenizer.last_token.type.lower() == 'odd':
             tokenizer.next()
-            self._parse_exp(base, offset)
+            self._parse_exp()
             self.code_gen.comp_odd()
         else:
             op = None
-            self._parse_exp(base, offset)
+            self._parse_exp()
             if tokenizer.last_token.type not in Scanner.COMPARATORS:
                 self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'cond', 'comparator'))
             else:
                 op = tokenizer.last_token.type
                 tokenizer.next()
-            self._parse_exp(base, offset)
+            self._parse_exp()
             if op:
                 self.code_gen.condition(op)
 
-    def _parse_exp(self, base, offset):
+    def _parse_exp(self):
         self.logger.info('_parse_exp')
         tokenizer = self.tokenizer
         cont = True
@@ -135,7 +135,7 @@ class Parser(object):
             tokenizer.next()
 
         while cont:
-            self._parse_term(base, offset)
+            self._parse_term()
             if negate:
                 self.code_gen.neg()
                 negate = False
@@ -149,22 +149,22 @@ class Parser(object):
             else:
                 cont = False
 
-    def _parse_prop(self, base, offset):
+    def _parse_prop(self):
         self.logger.info('_parse_prop')
         tokenizer = self.tokenizer
         if tokenizer.last_token.type == 'ID':
-            if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
+            if self.semantic.id_not_exists(tokenizer.last_token.value):
                 self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'assignment', 'ID'))
-            if self.semantic.cannot_assign(tokenizer.last_token.value, base, offset):
+            if self.semantic.cannot_assign(tokenizer.last_token.value):
                 self._add_error(CompilationError(CompilationError.ID_NOT_ASSIGNABLE, tokenizer.last_token, 'assignment', 'ID'))
 
-            var_index = self.semantic.get_value(tokenizer.last_token.value, base, offset)
+            var_index = self.semantic.get_value(tokenizer.last_token.value)
             tokenizer.next()
             if tokenizer.last_token.type == 'BECOMES' or tokenizer.last_token.type == 'EQL':
                 if tokenizer.last_token.type == 'EQL':
                     self._add_error(CompilationError(CompilationError.EQL_BECOMES_MISMATCH, tokenizer.last_token, 'assignment', 'BECOMES'))
                 tokenizer.next()
-                self._parse_exp(base, offset)
+                self._parse_exp()
                 self.code_gen.assign(var_index)
             else:
                 self._add_error(CompilationError(CompilationError.INVALID_TOKEN, tokenizer.last_token, 'assignment', 'BECOMES'))
@@ -173,12 +173,12 @@ class Parser(object):
 
         elif tokenizer.last_token.type.lower() == 'call':
             if tokenizer.next().type == 'ID':
-                if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
+                if self.semantic.id_not_exists(tokenizer.last_token.value):
                     self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'call', 'ID'))
-                elif self.semantic.cannot_call(tokenizer.last_token.value, base, offset):
+                elif self.semantic.cannot_call(tokenizer.last_token.value):
                     self._add_error(CompilationError(CompilationError.ID_NOT_CALLABLE, tokenizer.last_token, 'call', 'ID'))
 
-                address = self.semantic.get_value(tokenizer.last_token.value, base, offset)
+                address = self.semantic.get_value(tokenizer.last_token.value)
                 self.code_gen.call(address)
                 tokenizer.next()
             elif tokenizer.last_token.type == 'SEMICOLON':
@@ -192,7 +192,7 @@ class Parser(object):
             tokenizer.next()
             while seguir:
                 token = tokenizer.last_token
-                self._parse_prop(base, offset)
+                self._parse_prop()
                 if tokenizer.last_token.type.lower() == 'end':
                     seguir = False
                     tokenizer.next()
@@ -206,24 +206,24 @@ class Parser(object):
 
         elif tokenizer.last_token.type.lower() == 'if':
             tokenizer.next()
-            self._parse_cond(base, offset)
+            self._parse_cond()
             if tokenizer.last_token.type.lower() != 'then':
                 self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'if', 'then'))
             else:
                 tokenizer.next()
-            offset = self._parse_prop(base, offset)
+            self._parse_prop()
 
             self.code_gen.fix_if_jmp()
 
         elif tokenizer.last_token.type.lower() == 'while':
             self.code_gen.init_while()
             tokenizer.next()
-            self._parse_cond(base, offset)
+            self._parse_cond()
             if tokenizer.last_token.type.lower() != 'do':
                 self._add_error(CompilationError(CompilationError.MISSING_TOKEN, self._tokenizer.last_token, 'while', 'do'))
             else:
                 tokenizer.next()
-            offset = self._parse_prop(base, offset)
+            self._parse_prop()
 
             self.code_gen.while_loop()
             self.code_gen.fix_if_jmp()
@@ -236,12 +236,12 @@ class Parser(object):
             seguir = True
             while seguir:
                 if tokenizer.last_token.type == 'ID':
-                    if self.semantic.id_not_exists(tokenizer.last_token.value, base, offset):
+                    if self.semantic.id_not_exists(tokenizer.last_token.value):
                         self._add_error(CompilationError(CompilationError.ID_NOT_EXISTS, tokenizer.last_token, 'readln', 'ID'))
-                    elif self.semantic.cannot_assign(tokenizer.last_token.value, base, offset):
+                    elif self.semantic.cannot_assign(tokenizer.last_token.value):
                         self._add_error(CompilationError(CompilationError.ID_NOT_ASSIGNABLE, tokenizer.last_token, 'readln', 'ID'))
 
-                    var_index = self.semantic.get_value(tokenizer.last_token.value, base, offset)
+                    var_index = self.semantic.get_value(tokenizer.last_token.value)
                     self.code_gen.readln(var_index)
                     tokenizer.next()
                 else:
@@ -273,7 +273,7 @@ class Parser(object):
                     self.code_gen.write_string(tokenizer.last_token.value)
                     tokenizer.next()
                 else:
-                    self._parse_exp(base, offset)
+                    self._parse_exp()
                     self.code_gen.write_exp()
                 if tokenizer.last_token.type == 'RPAREN':
                     seguir = False
@@ -285,7 +285,6 @@ class Parser(object):
                     seguir = False
             if is_writeln:
                 self.code_gen.writeln() # Revisar!!!!!!
-        return offset
 
     def _parse_block(self, base=0):
         self.logger.info('_parse_block')
@@ -384,6 +383,8 @@ class Parser(object):
             self._parse_block(base + offset)
             self.code_gen.ret()
 
+            self.semantic.crop(base + offset)
+
             if tokenizer.last_token.type != 'SEMICOLON':
                 self._add_error(CompilationError(CompilationError.MISSING_TOKEN, tokenizer.last_token, 'procedure', 'SEMICOLON'))
             else:
@@ -392,7 +393,7 @@ class Parser(object):
             procedure = tokenizer.last_token.type.lower() == 'procedure'
 
         self.code_gen.fix_block_jmp()
-        self._parse_prop(base, offset)
+        self._parse_prop()
 
     def _process_next(self, expected_token, next_token, context, default=None, mismatch=None):
         value = default

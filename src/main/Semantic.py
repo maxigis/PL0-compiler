@@ -14,11 +14,11 @@ class Semantic(object):
     def id_not_exists_in_context(self, name, base, offset):
         return not self.id_exists_in_context(name, base, offset)
 
-    def id_exists(self, name, base, offset):
-        return self._find(name, base, offset)
+    def id_exists(self, name):
+        return self._find(name)
 
-    def id_not_exists(self, name, base, offset):
-        return not self.id_exists(name, base, offset)
+    def id_not_exists(self, name):
+        return not self.id_exists(name)
 
     def add_id(self, base, offset, id_type, id_name, id_value=None):
         if len(self.table) < base + offset:
@@ -41,39 +41,42 @@ class Semantic(object):
                 return True
         return False
 
-    def _find(self, name, base, offset, types=None):
-        for i in range(base + offset - 1, -1, -1):
-            if self.table[i][NAME] == name:
-                if not types or self.table[i][TYPE] in types:
-                    return self.table[i]
+    def _find(self, name, types=None):
+        for entry in self.table[::-1]:
+            if entry[NAME] == name:
+                if not types or entry[TYPE] in types:
+                    return entry
                 else:
                     return None
         return None
 
-    def _get(self, name, base, offset, elem):
-        found = self._find(name, base, offset)
+    def _get(self, name, elem):
+        found = self._find(name)
         return found[elem] if found else None
 
     def get_var_amount(self):
         return self.var_amount
 
-    def cannot_assign(self, name, base, offset):
-        return not self._find(name, base, offset, ["var"])
+    def cannot_assign(self, name):
+        return not self._find(name, ["var"])
 
-    def cannot_call(self, name, base, offset):
-        return not self._find(name, base, offset, ["procedure"])
+    def cannot_call(self, name):
+        return not self._find(name, ["procedure"])
 
-    def cannot_factor(self, name, base, offset):
-        return not self._find(name, base, offset, ["var", "const"])
+    def cannot_factor(self, name):
+        return not self._find(name, ["var", "const"])
 
-    def cannot_read(self, name, base, offset):
-        return not self._find(name, base, offset, ["var"])
+    def cannot_read(self, name):
+        return not self._find(name, ["var"])
 
-    def get_value(self, name, base, offset):
-        return self._get(name, base, offset, VALUE)
+    def get_value(self, name):
+        return self._get(name, VALUE)
 
-    def get_type(self, name, base, offset):
-        return self._get(name, base, offset, TYPE)
+    def get_type(self, name):
+        return self._get(name, TYPE)
 
     def __str__(self):
         return str(self.table)
+
+    def crop(self, count_entries):
+        self.table = self.table[:count_entries]
