@@ -1,0 +1,5 @@
+const MAX = 1000;
+var X;
+procedure setmax;
+	X := MAX;
+call setmax.

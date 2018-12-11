@@ -3,7 +3,7 @@ from main import lex
 
 class Scanner(object):
 
-    COMPARATORS = ['=', '<>', '<', '>', '<=', '>=']
+    COMPARATORS = ['EQL', 'NEQ', 'LSS', 'GTR', 'LEQ', 'GEQ']
 
     def __init__(self, data):
         self.last_token = None
@@ -11,7 +11,7 @@ class Scanner(object):
         self.input(data)
 
     keywords = (
-        'begin', 'call', 'const', 'do', 'end', 'if', 'odd', 'procedure', 'then', 'var', 'while', 'write', 'writeln', 'readln'
+        'begin', 'call', 'const', 'do', 'end', 'if', 'odd', 'procedure', 'then', 'var', 'while', 'write', 'writeln', 'readln', 'else'
     )
 
     tokens = keywords + (

@@ -1,0 +1,2 @@
+const X = 2;
+writeln('X=', X).

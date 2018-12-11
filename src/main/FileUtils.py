@@ -15,6 +15,16 @@ def read_lines(filename):
     return lines
 
 
+def read_binary(filename):
+    file = open(filename, 'rb')
+
+    try:
+        content = file.read()
+    finally:
+        file.close()
+    return content
+
+
 def file_exists(filename):
     return Path(filename).is_file()
 
